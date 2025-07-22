@@ -1,0 +1,7 @@
+README.md
+.git/
+.vscode/
+.gitignore
+.micropicoupload
+.claude/
+*.md
