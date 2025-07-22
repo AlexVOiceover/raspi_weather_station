@@ -1,8 +1,8 @@
 import network, socket
-from machine import Pin, SPI
+from machine import Pin, I2C
 import dht
 import time
-import gc9a01
+import ssd1306
 
 # Configure built-in LED
 led = Pin("LED", Pin.OUT)
@@ -29,136 +29,88 @@ def led_error_pattern():
 # Configura sensor DHT22 en GP2
 sensor = dht.DHT22(Pin(2))
 
-# Configure GC9A01 display
-spi = SPI(1, baudrate=10000000, sck=Pin(14), mosi=Pin(15))  # Slower baudrate
-display = gc9a01.GC9A01(spi=spi, dc=Pin(16), cs=Pin(13), reset=Pin(17))
+# Configure OLED display (I2C) - Instructables tutorial pins
+i2c = I2C(0, sda=Pin(4), scl=Pin(5), freq=400000)
+display = ssd1306.SSD1306_I2C(128, 64, i2c)
 
-def draw_digit(x, y, digit, color):
-    """Draw a simple 7-segment style digit using rectangles"""
-    # Define 7-segment patterns for digits 0-9
-    segments = {
-        0: [1,1,1,1,1,1,0],  # top, top-right, bottom-right, bottom, bottom-left, top-left, middle
-        1: [0,1,1,0,0,0,0],
-        2: [1,1,0,1,1,0,1],
-        3: [1,1,1,1,0,0,1],
-        4: [0,1,1,0,0,1,1],
-        5: [1,0,1,1,0,1,1],
-        6: [1,0,1,1,1,1,1],
-        7: [1,1,1,0,0,0,0],
-        8: [1,1,1,1,1,1,1],
-        9: [1,1,1,1,0,1,1]
-    }
-    
-    if digit in segments:
-        segs = segments[digit]
-        # Draw segments as rectangles
-        if segs[0]: display.fill_rect(x+2, y, 16, 3, color)      # top
-        if segs[1]: display.fill_rect(x+17, y+2, 3, 16, color)   # top-right
-        if segs[2]: display.fill_rect(x+17, y+18, 3, 16, color)  # bottom-right
-        if segs[3]: display.fill_rect(x+2, y+33, 16, 3, color)   # bottom
-        if segs[4]: display.fill_rect(x, y+18, 3, 16, color)     # bottom-left
-        if segs[5]: display.fill_rect(x, y+2, 3, 16, color)      # top-left
-        if segs[6]: display.fill_rect(x+2, y+16, 16, 3, color)   # middle
 
-def draw_number(x, y, number, color):
-    """Draw a number using digital-style digits"""
-    num_str = f"{number:.1f}"
-    pos_x = x
-    for char in num_str:
-        if char == '.':
-            display.fill_rect(pos_x + 5, y + 30, 3, 3, color)  # decimal point
-            pos_x += 10
-        elif char.isdigit():
-            draw_digit(pos_x, y, int(char), color)
-            pos_x += 25
-        else:
-            pos_x += 10  # space for other characters
+def format_sensor_value(value, unit):
+    """Format sensor value with unit"""
+    return f"{value:.1f}{unit}"
 
-def draw_unit_c(x, y, color):
-    """Draw °C unit symbol"""
-    # Degree symbol (small circle)
-    display.fill_rect(x, y, 8, 8, color)
-    display.fill_rect(x+2, y+2, 4, 4, gc9a01.BLACK)
-    # C letter
-    display.fill_rect(x+12, y, 15, 3, color)      # top
-    display.fill_rect(x+12, y+3, 3, 10, color)    # left side
-    display.fill_rect(x+12, y+13, 15, 3, color)   # bottom
+def show_startup_message():
+    """Show initial startup message"""
+    display.fill(0)  # Clear display
+    display.text("PICO WEATHER", 15, 2)
+    display.text("Station", 35, 20)
+    display.text("Starting up...", 15, 35)
+    display.show()
 
-def draw_unit_percent(x, y, color):
-    """Draw % unit symbol"""
-    # Top left circle
-    display.fill_rect(x, y, 6, 6, color)
-    display.fill_rect(x+2, y+2, 2, 2, gc9a01.BLACK)
-    # Bottom right circle
-    display.fill_rect(x+18, y+10, 6, 6, color)
-    display.fill_rect(x+20, y+12, 2, 2, gc9a01.BLACK)
-    # Diagonal line from top-right to bottom-left
-    for i in range(16):
-        display.fill_rect(x+6+i, y+15-i, 2, 2, color)
+def show_wifi_connecting(ssid, attempt, max_attempts):
+    """Show WiFi connection status with progress bar"""
+    display.fill(0)  # Clear display
+    
+    # Title
+    display.text("PICO WEATHER", 15, 2)
+    
+    # Connection status
+    display.text("Connecting to:", 5, 20)
+    # Truncate SSID if too long
+    short_ssid = ssid[:12] if len(ssid) > 12 else ssid
+    display.text(short_ssid, 5, 30)
+    
+    # Faster progress bar - use fewer total attempts for calculation
+    attempts_passed = max_attempts - attempt
+    progress = attempts_passed / 20  # Use 20 instead of 60 for faster progress
+    bar_width = int(min(progress, 1.0) * 100)  # Cap at 100%
+    display.rect(10, 45, 102, 8, 1)  # Border
+    if bar_width > 0:
+        display.fill_rect(11, 46, bar_width, 6, 1)  # Progress
+    
+    display.show()
 
-def draw_unit_dbm(x, y, rssi, color):
-    """Draw WiFi signal strength in dBm"""
-    rssi_str = f"{rssi}"
-    pos_x = x
-    # Draw the number
-    for char in rssi_str:
-        if char.isdigit():
-            draw_digit(pos_x, y, int(char), color)
-            pos_x += 20
-        elif char == '-':
-            display.fill_rect(pos_x+5, y+16, 10, 3, color)  # minus sign
-            pos_x += 20
-    
-    # Add spacing and align units vertically with other units
-    pos_x += 10  # Space between number and unit
-    unit_y = y + 5  # Align with °C and % units
-    
-    # Draw "dBm" units
-    # d
-    display.fill_rect(pos_x, unit_y, 3, 16, color)
-    display.fill_rect(pos_x+3, unit_y, 8, 3, color)
-    display.fill_rect(pos_x+3, unit_y+13, 8, 3, color)
-    display.fill_rect(pos_x+11, unit_y+3, 3, 10, color)
-    pos_x += 18
-    
-    # B
-    display.fill_rect(pos_x, unit_y, 3, 16, color)
-    display.fill_rect(pos_x+3, unit_y, 8, 3, color)
-    display.fill_rect(pos_x+3, unit_y+6, 8, 3, color)
-    display.fill_rect(pos_x+3, unit_y+13, 8, 3, color)
-    display.fill_rect(pos_x+11, unit_y+3, 3, 3, color)
-    display.fill_rect(pos_x+11, unit_y+10, 3, 3, color)
-    pos_x += 18
-    
-    # m
-    display.fill_rect(pos_x, unit_y+6, 3, 10, color)
-    display.fill_rect(pos_x+3, unit_y+6, 3, 3, color)
-    display.fill_rect(pos_x+6, unit_y+9, 3, 7, color)
-    display.fill_rect(pos_x+9, unit_y+6, 3, 3, color)
-    display.fill_rect(pos_x+12, unit_y+9, 3, 7, color)
+
 
 def update_display(temp, hum, wifi_rssi, prev_temp, prev_hum, prev_rssi):
-    """Update the GC9A01 display with current readings - only redraw changed values"""
-    
-    # Only update temperature if it changed
-    if prev_temp != temp:
-        display.fill_rect(20, 50, 170, 40, gc9a01.BLACK)
-        draw_number(20, 50, temp, gc9a01.RED)
-        draw_unit_c(130, 55, gc9a01.RED)
-    
-    # Only update humidity if it changed
-    if prev_hum != hum:
-        display.fill_rect(20, 100, 170, 40, gc9a01.BLACK)
-        draw_number(20, 100, hum, gc9a01.BLUE)
-        draw_unit_percent(130, 105, gc9a01.BLUE)
-    
-    # Only update WiFi if it changed
-    if prev_rssi != wifi_rssi:
-        display.fill_rect(20, 150, 200, 40, gc9a01.BLACK)
+    """Update the OLED display with current readings"""
+
+    # Check if any value changed
+    changed = prev_temp != temp or prev_hum != hum or prev_rssi != wifi_rssi
+
+    if changed:
+        display.fill(0)  # Clear display
+
+        # Title
+        display.text("PICO WEATHER", 15, 2)
+
+        # Temperature
+        temp_str = format_sensor_value(temp, "C")
+        display.text(f"Temp: {temp_str}", 0, 16)
+
+        # Humidity
+        hum_str = format_sensor_value(hum, "%")
+        display.text(f"Hum:  {hum_str}", 0, 26)
+
+        # WiFi status
         if wlan.isconnected():
-            draw_unit_dbm(20, 150, wifi_rssi, gc9a01.GREEN)
+            display.text(f"WiFi: {wifi_rssi}dBm", 0, 36)
         else:
-            display.fill_rect(20, 150, 100, 30, gc9a01.RED)
+            display.text("WiFi: Disconnected", 0, 36)
+
+        # IP Address (if connected) - split across two lines if needed
+        if wlan.isconnected():
+            ip = wlan.ifconfig()[0].strip()  # Remove any whitespace
+            if len(ip) > 12:  # If IP is too long, split it
+                display.text("IP:", 0, 46)
+                display.text(ip, 0, 55)
+            else:
+                display.text(f"IP:{ip}", 0, 46)  # No space after colon
+
+        display.show()
+
+
+# Show initial startup message on display
+show_startup_message()
 
 # LED startup indication
 blink_led(3, 0.5)  # 3 slow blinks = starting up
@@ -190,6 +142,9 @@ wlan.connect(ssid, password)
 print("Conectando a Wi-Fi...", end="")
 max_wait = 60
 while max_wait > 0:
+    # Show connection status on OLED with animation
+    show_wifi_connecting(ssid, max_wait, 60)
+    
     status = wlan.status()
     if status == 3:  # Connected and got IP
         break
@@ -259,29 +214,31 @@ while True:
                 temp = sensor.temperature()
                 hum = sensor.humidity()
                 # Get WiFi signal strength (RSSI)
-                wifi_rssi = wlan.status('rssi') if wlan.isconnected() else -100
-                
+                wifi_rssi = wlan.status("rssi") if wlan.isconnected() else -100
+
                 # Update display only if values changed
                 update_display(temp, hum, wifi_rssi, prev_temp, prev_hum, prev_rssi)
-                
+
                 # Check if any value actually changed for logging
-                changed = (prev_temp != temp or prev_hum != hum or prev_rssi != wifi_rssi)
+                changed = prev_temp != temp or prev_hum != hum or prev_rssi != wifi_rssi
                 if changed:
-                    print(f"Display updated: temp={temp:.1f}°C, hum={hum:.1f}%, rssi={wifi_rssi}dBm")
+                    print(
+                        f"Display updated: temp={temp:.1f}°C, hum={hum:.1f}%, rssi={wifi_rssi}dBm"
+                    )
                 else:
                     print("Values unchanged - no display update needed")
-                
+
                 # Update previous values
                 prev_temp, prev_hum, prev_rssi = temp, hum, wifi_rssi
                 last_update = current_time
-                
+
             except Exception as e:
                 print("Error reading sensor:", e)
                 # Brief LED off for sensor error
                 led.off()
                 time.sleep(0.05)
                 led.on()
-        
+
         # Check for web requests (non-blocking)
         s.settimeout(0.1)  # 100ms timeout
         try:
@@ -291,11 +248,13 @@ while True:
             # Read the HTTP request
             request = cl.recv(1024)
             request_str = request.decode("utf-8")
-            
+
             # Parse request path
             request_line = request_str.split("\r\n")[0]
-            path = request_line.split(" ")[1] if len(request_line.split(" ")) > 1 else "/"
-            
+            path = (
+                request_line.split(" ")[1] if len(request_line.split(" ")) > 1 else "/"
+            )
+
             if path == "/favicon.ico":
                 # Return 404 for favicon
                 error_response = "404 Not Found"
@@ -317,13 +276,13 @@ while True:
 
                 cl.send(headers.encode("utf-8"))
                 cl.send(response.encode("utf-8"))
-                
+
             cl.close()
-            
+
         except OSError:
             # No incoming connections, continue
             pass
-            
+
     except Exception as e:
         print("Error in main loop:", e)
         time.sleep(1)
