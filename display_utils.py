@@ -13,7 +13,7 @@ class DisplayManager:
         self.display.text("Starting up...", 15, 25)
         self.display.show()
 
-    def show_wifi_connecting(self, ssid, attempt, max_attempts):
+    def show_wifi_connecting(self, ssid, attempt, max_attempts, status=None):
         """Show WiFi connection status with progress bar"""
         self.display.fill(0)
 
@@ -26,15 +26,16 @@ class DisplayManager:
         short_ssid = ssid[:12] if len(ssid) > 12 else ssid
         self.display.text(short_ssid, 5, 30)
 
-        # Progress bar
+        # Fixed progress bar
         attempts_passed = max_attempts - attempt
-        progress = attempts_passed / 20
+        progress = attempts_passed / max_attempts
         bar_width = int(min(progress, 1.0) * 100)
         self.display.rect(10, 45, 102, 8, 1)  # Border
         if bar_width > 0:
             self.display.fill_rect(11, 46, bar_width, 6, 1)  # Progress
 
         self.display.show()
+    
 
     def show_weather_data(self, temp, hum, wifi_rssi, wlan):
         """Display weather station data"""

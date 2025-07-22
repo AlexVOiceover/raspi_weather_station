@@ -37,7 +37,7 @@ wifi.scan_networks()
 
 # Connect to WiFi
 if not wifi.connect():
-    print("Error: Revisar SSID y contraseña")
+    print("Error: Check SSID and password")
     time.sleep(5)  # Give time to see the error on display
     sys.exit()
 
@@ -47,7 +47,7 @@ try:
     web_server.start()
     led.on()  # Solid LED = server running
 except Exception as e:
-    print("Error iniciando servidor:", e)
+    print("Error starting server:", e)
     led.error_pattern()
     sys.exit()
 

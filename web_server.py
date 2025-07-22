@@ -8,7 +8,7 @@ class WeatherWebServer:
         self.html_template = """<!DOCTYPE html>
 <html>
   <head><title>Pico W DHT22</title></head>
-  <body><h1>Temperatura y Humedad</h1>
+  <body><h1>Temperature and Humidity</h1>
     <p>Temp: {temp:.1f} &deg;C<br>Hum: {hum:.1f} %</p>
   </body>
 </html>"""
@@ -23,7 +23,7 @@ class WeatherWebServer:
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.bind(addr)
         self.socket.listen(1)
-        print(f"Servidor HTTP en http://{self.wifi_manager.get_ip()}:80")
+        print(f"HTTP server at http://{self.wifi_manager.get_ip()}:80")
         return True
     
     def handle_request(self, temp, hum, timeout=0.1):

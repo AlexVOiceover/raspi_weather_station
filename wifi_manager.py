@@ -13,8 +13,8 @@ class WiFiManager:
     
     def scan_networks(self):
         """Scan and return available networks"""
-        print("WiFi activo:", self.wlan.active())
-        print("Redes disponibles:")
+        print("WiFi active:", self.wlan.active())
+        print("Available networks:")
         networks = self.wlan.scan()
         for net in networks:
             print("  ", net[0].decode("utf-8"))
@@ -22,24 +22,25 @@ class WiFiManager:
     
     def connect(self, timeout=60):
         """Connect to WiFi with timeout and display updates"""
-        print(f"Conectando a: {self.ssid}")
+        print(f"Connecting to: {self.ssid}")
         self.wlan.disconnect()
         time.sleep(1)
         self.wlan.connect(self.ssid, self.password)
         
-        print("Conectando a Wi-Fi...", end="")
+        print("Connecting to Wi-Fi...", end="")
         max_wait = timeout
         
         while max_wait > 0:
+            status = self.wlan.status()
+            
             # Show connection progress on display if available
             if self.display_manager:
-                self.display_manager.show_wifi_connecting(self.ssid, max_wait, timeout)
+                self.display_manager.show_wifi_connecting(self.ssid, max_wait, timeout, status)
             
-            status = self.wlan.status()
             if status == 3:  # Connected and got IP
                 break
             elif status < 0:  # Connection failed
-                print(f"\nError de conexión: {status}")
+                print(f"\nConnection error: {status}")
                 if self.led_controller:
                     self.led_controller.error_pattern()
                 return False
@@ -53,13 +54,13 @@ class WiFiManager:
                 self.led_controller.blink(1, 0.1)
         
         if self.wlan.isconnected():
-            print(f"\nConectado: {self.wlan.ifconfig()}")
+            print(f"\nConnected: {self.wlan.ifconfig()}")
             if self.led_controller:
                 self.led_controller.blink(2, 0.3)  # Success pattern
             return True
         else:
             status = self.wlan.status()
-            print("\nFallo conexión Wi-Fi")
+            print("\nWi-Fi connection failed")
             print("Status:", status)
             
             # Show error on display

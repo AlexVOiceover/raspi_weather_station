@@ -28,8 +28,7 @@ Raspberry Pi Pico W Connections:
 DHT22 Sensor:
 ├── VCC → 3.3V (Pin 36)
 ├── GND → Ground (Pin 38)
-├── DATA → GP2 (Pin 4)
-└── (No connection to pin 4 on sensor)
+└── DATA → GP2 (Pin 4)
 
 SSD1306 OLED Display (I2C):
 ├── VCC → 3.3V (Pin 36)
@@ -40,16 +39,6 @@ SSD1306 OLED Display (I2C):
 Built-in Components:
 └── LED → Built-in (automatic)
 
-Connection Summary:
-| Component | Wire Color | Pico W Pin | GPIO | Purpose |
-|-----------|------------|------------|------|---------|
-| DHT22 VCC | Red        | Pin 36     | 3.3V | Power   |
-| DHT22 GND | Black      | Pin 38     | GND  | Ground  |
-| DHT22 DATA| Yellow     | Pin 4      | GP2  | Data    |
-| OLED VCC  | Red        | Pin 36     | 3.3V | Power   |
-| OLED GND  | Black      | Pin 38     | GND  | Ground  |
-| OLED SCL  | White      | Pin 7      | GP5  | Clock   |
-| OLED SDA  | Blue       | Pin 6      | GP4  | Data    |
 ```
 
 ## Quick Setup
