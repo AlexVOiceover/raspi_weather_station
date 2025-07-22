@@ -40,17 +40,16 @@ SSD1306 OLED Display (I2C):
 Built-in Components:
 └── LED → Built-in (automatic)
 
-Pin Reference:
-┌─────────────┐   ┌─────────────┐
-│1   GP0     2│   │39  VSYS   40│ ← 5V (VBUS)
-│3   GP1     4│ ← │37  3V3_EN  38│ ← Ground
-│5   GP2  ●  6│   │35  n/c     36│ ← 3.3V
-│7   GP3     8│   │33  GND     34│
-│9   GP4  ●  10│  │31  GP26    32│
-│11  GP5  ●  12│  │29  GP27    30│
-│13  GND     14│  │27  GP28    28│
-└─────────────┘   └─────────────┘
-● = Used pins (GP2, GP4, GP5)
+Connection Summary:
+| Component | Wire Color | Pico W Pin | GPIO | Purpose |
+|-----------|------------|------------|------|---------|
+| DHT22 VCC | Red        | Pin 36     | 3.3V | Power   |
+| DHT22 GND | Black      | Pin 38     | GND  | Ground  |
+| DHT22 DATA| Yellow     | Pin 4      | GP2  | Data    |
+| OLED VCC  | Red        | Pin 36     | 3.3V | Power   |
+| OLED GND  | Black      | Pin 38     | GND  | Ground  |
+| OLED SCL  | White      | Pin 7      | GP5  | Clock   |
+| OLED SDA  | Blue       | Pin 6      | GP4  | Data    |
 ```
 
 ## Quick Setup
