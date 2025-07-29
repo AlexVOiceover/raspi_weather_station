@@ -29,7 +29,9 @@ try:
     from config import SSID, PASSWORD
     ssid, password = SSID, PASSWORD
 except ImportError:
-    ssid, password = "adriananet", "pepinos!y2Centollas"
+    print("Error importing configuration - config.py not found")
+    print("Please create config.py with SSID and PASSWORD")
+    sys.exit()
 
 # Initialize WiFi with display feedback
 wifi = WiFiManager(ssid, password, display, led)
@@ -60,7 +62,7 @@ prev_temp = prev_hum = prev_rssi = None
 while True:
     try:
         current_time = time.ticks_ms()
-        
+
         # Update sensor readings every 5 seconds
         if time.ticks_diff(current_time, last_update) > 5000:
             try:
@@ -70,11 +72,13 @@ while True:
                 wifi_rssi = wifi.get_rssi()
 
                 # Update display only if values changed
-                changed = (prev_temp != temp or prev_hum != hum or prev_rssi != wifi_rssi)
+                changed = prev_temp != temp or prev_hum != hum or prev_rssi != wifi_rssi
                 if changed:
                     display.show_weather_data(temp, hum, wifi_rssi, wifi.wlan)
-                    print(f"Updated: temp={temp:.1f}°C, hum={hum:.1f}%, rssi={wifi_rssi}dBm")
-                
+                    print(
+                        f"Updated: temp={temp:.1f}°C, hum={hum:.1f}%, rssi={wifi_rssi}dBm"
+                    )
+
                 prev_temp, prev_hum, prev_rssi = temp, hum, wifi_rssi
                 last_update = current_time
 

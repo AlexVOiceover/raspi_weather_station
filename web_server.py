@@ -26,7 +26,7 @@ class WeatherWebServer:
         print(f"HTTP server at http://{self.wifi_manager.get_ip()}:80")
         return True
     
-    def handle_request(self, temp, hum, timeout=0.1):
+    def handle_request(self, temp, hum, timeout=0.5):
         """Handle incoming web requests (non-blocking)"""
         if not self.socket:
             return
@@ -35,27 +35,44 @@ class WeatherWebServer:
         try:
             cl, addr = self.socket.accept()
             print("Web request from", addr)
-
-            # Read HTTP request
-            request = cl.recv(1024)
-            request_str = request.decode("utf-8")
             
-            # Parse request path
-            request_line = request_str.split("\r\n")[0]
-            path = request_line.split(" ")[1] if len(request_line.split(" ")) > 1 else "/"
-            
-            if path == "/favicon.ico":
-                # Return 404 for favicon
-                self._send_404(cl)
-            else:
-                # Serve main page
-                self._send_weather_page(cl, temp, hum)
+            try:
+                # Read HTTP request with timeout
+                cl.settimeout(2.0)  # Give client time to send request
+                request = cl.recv(1024)
                 
-            cl.close()
+                if not request:
+                    cl.close()
+                    return
+                    
+                request_str = request.decode("utf-8")
+                
+                # Parse request path
+                request_line = request_str.split("\r\n")[0]
+                path = request_line.split(" ")[1] if len(request_line.split(" ")) > 1 else "/"
+                
+                if path == "/favicon.ico":
+                    # Return 404 for favicon
+                    self._send_404(cl)
+                else:
+                    # Serve main page
+                    self._send_weather_page(cl, temp, hum)
+                    
+            except Exception as e:
+                print(f"Error processing request: {e}")
+            finally:
+                try:
+                    cl.close()
+                except:
+                    pass  # Socket may already be closed
             
         except OSError:
-            # No incoming connections
+            # No incoming connections (normal for non-blocking)
             pass
+        except Exception as e:
+            print(f"Server error: {e}")
+            # Try to restart server if needed
+            self._restart_if_needed()
     
     def _send_404(self, client):
         """Send 404 response"""
@@ -77,3 +94,18 @@ class WeatherWebServer:
         
         client.send(headers.encode("utf-8"))
         client.send(response.encode("utf-8"))
+    
+    def _restart_if_needed(self):
+        """Restart server if socket is broken"""
+        try:
+            if self.socket:
+                self.socket.close()
+        except:
+            pass
+        
+        try:
+            # Restart server
+            self.start()
+            print("Web server restarted")
+        except Exception as e:
+            print(f"Failed to restart server: {e}")

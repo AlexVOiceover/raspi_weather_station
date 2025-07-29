@@ -1,0 +1,48 @@
+flowchart TD
+    subgraph "Power Sources"
+        LIPO["2S LiPo Battery<br/>7.4V"]
+        USB_VBUS["Pin 40 (VBUS)<br/>5V from USB"]
+    end
+    
+    subgraph "Protection Diodes"
+        D1["D1<br/>Schottky Diode<br/>1N5819"]
+        D2["D2<br/>Schottky Diode<br/>1N5819"]
+    end
+    
+    subgraph "Voltage Regulation"
+        AMS["AMS1117-3.3<br/>Voltage Regulator"]
+        GND_COMMON["Common Ground"]
+    end
+    
+    subgraph "Raspberry Pi Pico 2 W"
+        PICO_VSYS["Pin 39 (VSYS)"]
+        PICO_VBUS["Pin 40 (VBUS)"]
+        PICO_GND["Pin 38 (GND)"]
+    end
+    
+    %% Power connections
+    LIPO -->|"RED (+)"| D1
+    PICO_VBUS -->|"5V from USB"| D2
+    
+    %% Diode outputs merge
+    D1 -->|"Cathode"| AMS
+    D2 -->|"Cathode"| AMS
+    
+    %% Ground connections
+    LIPO -->|"BLACK (-)"| GND_COMMON
+    PICO_GND --> GND_COMMON
+    GND_COMMON --> AMS
+    
+    %% Regulated output back to Pico
+    AMS -->|"3.3V OUT"| PICO_VSYS
+    
+    %% Styling
+    classDef power fill:#ff9999,stroke:#333,stroke-width:2px
+    classDef protection fill:#99ccff,stroke:#333,stroke-width:2px
+    classDef regulation fill:#99ff99,stroke:#333,stroke-width:2px
+    classDef pico fill:#ffcc99,stroke:#333,stroke-width:2px
+    
+    class LIPO,USB_VBUS power
+    class D1,D2 protection
+    class AMS,GND_COMMON regulation
+    class PICO_VSYS,PICO_VBUS,PICO_GND pico
