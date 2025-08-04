@@ -36,7 +36,7 @@ class WeatherWebServer:
         .history-item {{ padding: 8px; border-bottom: 1px solid #ecf0f1; display: grid; grid-template-columns: 1fr 1fr 1fr 2fr; gap: 10px; align-items: center; }}
         .history-item:last-child {{ border-bottom: none; }}
         .history-header {{ padding: 10px 8px; border-bottom: 2px solid #3498db; display: grid; grid-template-columns: 1fr 1fr 1fr 2fr; gap: 10px; font-weight: bold; color: #2c3e50; }}
-        .ai-section {{ background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; border-left: 4px solid #e74c3c; }}
+        .ai-section {{ background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; border-left: 4px solid #e74c3c; display: none; }}
         .ai-prediction {{ text-align: center; }}
         .comfort-level {{ margin-bottom: 10px; }}
         .comfort-label {{ color: #7f8c8d; font-size: 1.1em; }}
@@ -59,6 +59,14 @@ class WeatherWebServer:
     </style>
     <script>
         setTimeout(function(){{ location.reload(); }}, 30000); // Auto-refresh every 30 seconds
+        
+        let clickCount = 0;
+        function revealAI() {{
+            clickCount++;
+            if (clickCount >= 3) {{
+                document.querySelector('.ai-section').style.display = 'block';
+            }}
+        }}
         
         function sendFeedback(rating) {{
             const temp = {temp};
@@ -87,7 +95,7 @@ class WeatherWebServer:
 <body>
     <div class="container">
         <div class="header">
-            <h1>🌡️ Pico W Weather Station</h1>
+            <h1><span onclick="revealAI()">🌡️</span> Pico W Weather Station</h1>
         </div>
         
         <div class="info">
