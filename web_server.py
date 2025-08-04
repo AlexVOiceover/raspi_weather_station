@@ -2,6 +2,7 @@
 import socket
 import select
 import time
+from machine import ADC
 
 
 class WeatherWebServer:
@@ -14,6 +15,7 @@ class WeatherWebServer:
         self.start_time = time.time()
         self.history = []  # Store readings: [(timestamp, temp, hum), ...]
         self.last_history_update = 0
+        self.internal_temp_sensor = ADC(4)  # Internal temperature sensor
 
         self.html_template = """<!DOCTYPE html>
 <html>
@@ -29,8 +31,9 @@ class WeatherWebServer:
         .metric-value {{ font-size: 2.5em; font-weight: bold; color: #e74c3c; }}
         .metric-label {{ font-size: 1.2em; color: #7f8c8d; }}
         .history {{ background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-        .history-item {{ padding: 8px; border-bottom: 1px solid #ecf0f1; display: flex; justify-content: space-between; }}
+        .history-item {{ padding: 8px; border-bottom: 1px solid #ecf0f1; display: grid; grid-template-columns: 1fr 1fr 1fr 2fr; gap: 10px; align-items: center; }}
         .history-item:last-child {{ border-bottom: none; }}
+        .history-header {{ padding: 10px 8px; border-bottom: 2px solid #3498db; display: grid; grid-template-columns: 1fr 1fr 1fr 2fr; gap: 10px; font-weight: bold; color: #2c3e50; }}
         .info {{ background: #3498db; color: white; padding: 15px; border-radius: 10px; margin-bottom: 20px; text-align: center; }}
         .footer {{ text-align: center; margin-top: 20px; color: #7f8c8d; font-size: 0.9em; }}
         @media (max-width: 600px) {{ .metric {{ margin: 10px 5px; }} .metric-value {{ font-size: 2em; }} }}
@@ -56,21 +59,31 @@ class WeatherWebServer:
             <h2>Current Readings</h2>
             <div class="metric">
                 <div class="metric-value">{temp:.1f}°</div>
-                <div class="metric-label">Temperature (°C)</div>
+                <div class="metric-label">Temperature</div>
             </div>
             <div class="metric">
                 <div class="metric-value">{hum:.1f}%</div>
                 <div class="metric-label">Humidity</div>
             </div>
+            <div class="metric">
+                <div class="metric-value">{internal_temp:.1f}°</div>
+                <div class="metric-label">Chip Temperature</div>
+            </div>
         </div>
         
         <div class="history">
             <h2>📊 Recent History (Last {history_count} readings)</h2>
+            <div class="history-header">
+                <span>Time</span>
+                <span>Temperature</span>
+                <span>Humidity</span>
+                <span>WiFi Signal</span>
+            </div>
             {history_html}
         </div>
         
         <div class="footer">
-            Last updated: {current_time} | Auto-refresh in 30s
+            <p>Last updated: {current_time} | Auto-refresh in 30s</p>
         </div>
     </div>
 </body>
@@ -133,6 +146,15 @@ class WeatherWebServer:
             return "Weak"
         else:
             return "Poor"
+
+    def _read_internal_temperature(self):
+        """Read internal chip temperature"""
+        try:
+            reading = self.internal_temp_sensor.read_u16() * (3.3 / 65535)
+            temperature = 27 - (reading - 0.706) / 0.001721
+            return temperature
+        except:
+            return 0.0  # Return 0 if sensor fails
 
     def handle_request(self, temp, hum):
         """Handle incoming web requests using polling"""
@@ -208,21 +230,13 @@ class WeatherWebServer:
                     timestamp, h_temp, h_hum, h_rssi = item
                     signal_strength = self._get_signal_strength(h_rssi)
                     time_str = self._format_time(timestamp)
-                    history_html += f"""
-                    <div class="history-item">
-                        <span>{time_str}</span>
-                        <span>{h_temp:.1f}°C, {h_hum:.1f}%, {h_rssi}dBm ({signal_strength})</span>
-                    </div>"""
+                    history_html += f'<div class="history-item"><span>{time_str}</span><span>{h_temp:.1f}°C</span><span>{h_hum:.1f}%</span><span>{h_rssi}dBm ({signal_strength})</span></div>'
                 else:  # Old format without RSSI (backward compatibility)
                     timestamp, h_temp, h_hum = item
                     time_str = self._format_time(timestamp)
-                    history_html += f"""
-                    <div class="history-item">
-                        <span>{time_str}</span>
-                        <span>{h_temp:.1f}°C, {h_hum:.1f}%</span>
-                    </div>"""
+                    history_html += f'<div class="history-item"><span>{time_str}</span><span>{h_temp:.1f}°C</span><span>{h_hum:.1f}%</span><span>No WiFi data</span></div>'
         else:
-            history_html = '<div class="history-item"><span>No historical data yet</span><span>-</span></div>'
+            history_html = '<div class="history-item"><span>No historical data yet</span><span>-</span><span>-</span><span>-</span></div>'
 
         # Format start time
         start_time_str = self._format_time(self.start_time)
@@ -231,9 +245,12 @@ class WeatherWebServer:
         current_time_str = self._format_time(time.time())
 
         current_rssi = self.wifi_manager.get_rssi()
+        internal_temp = self._read_internal_temperature()
+
         response = self.html_template.format(
             temp=temp,
             hum=hum,
+            internal_temp=internal_temp,
             start_time=start_time_str,
             wifi_rssi=current_rssi,
             wifi_strength=self._get_signal_strength(current_rssi),
