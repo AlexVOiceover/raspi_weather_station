@@ -1,4 +1,4 @@
-# Pico W Weather Station - Refactored Main File
+# FAC Weather Station - Refactored Main File
 from machine import Pin, I2C
 import dht
 import time

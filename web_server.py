@@ -15,14 +15,14 @@ class WeatherWebServer:
         self.clients = {}
         self.start_time = time.time()
         self.history = []  # Store readings: [(timestamp, temp, hum), ...]
-        self.last_history_update = 0
+        self.last_history_update = time.time()  # Initialize to current time
         self.internal_temp_sensor = ADC(4)  # Internal temperature sensor
         self.ai_brain = TinyWeatherPerceptron()  # Real AI neural network
 
         self.html_template = """<!DOCTYPE html>
 <html>
 <head>
-    <title>Pico W Weather Station</title>
+    <title>FAC Weather Station</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f0f8ff; }}
@@ -180,10 +180,10 @@ class WeatherWebServer:
     def update_history(self, temp, hum, rssi):
         """Update historical data - called every minute"""
         current_time = time.time()
-
         # Add reading if it's been at least 60 seconds since last update
         if current_time - self.last_history_update >= 60:
             self.history.append((current_time, temp, hum, rssi))
+            print(f"History updated: {len(self.history)} readings stored")
 
             # Keep only last 24 readings (24 minutes of history)
             if len(self.history) > 24:
@@ -269,12 +269,14 @@ class WeatherWebServer:
                                 # Flash LED 3 times for web request
                                 if self.led_controller:
                                     self.led_controller.web_request_flash()
-                                
+
                                 # REAL AI: Record that we made a prediction
                                 self.ai_brain.record_prediction(temp, hum)
-                                
+
                                 if path == "/feedback":
-                                    self._handle_feedback(client_socket, request_str, temp, hum)
+                                    self._handle_feedback(
+                                        client_socket, request_str, temp, hum
+                                    )
                                 else:
                                     self._send_weather_page(client_socket, temp, hum)
                         else:
@@ -310,33 +312,37 @@ class WeatherWebServer:
                 json_end = request_str.rfind("}") + 1
                 if json_start >= 0 and json_end > json_start:
                     json_str = request_str[json_start:json_end]
-                    
+
                     # Simple JSON parsing (avoiding imports)
-                    if '"rating":' in json_str and '"temp":' in json_str and '"humidity":' in json_str:
+                    if (
+                        '"rating":' in json_str
+                        and '"temp":' in json_str
+                        and '"humidity":' in json_str
+                    ):
                         # Extract rating value
                         rating_start = json_str.find('"rating":') + 9
-                        rating_end = json_str.find(',', rating_start)
+                        rating_end = json_str.find(",", rating_start)
                         if rating_end == -1:
-                            rating_end = json_str.find('}', rating_start)
+                            rating_end = json_str.find("}", rating_start)
                         rating = float(json_str[rating_start:rating_end].strip())
-                        
+
                         # Extract temperature
                         temp_start = json_str.find('"temp":') + 7
-                        temp_end = json_str.find(',', temp_start)
+                        temp_end = json_str.find(",", temp_start)
                         if temp_end == -1:
-                            temp_end = json_str.find('}', temp_start)
+                            temp_end = json_str.find("}", temp_start)
                         temp = float(json_str[temp_start:temp_end].strip())
-                        
+
                         # Extract humidity
                         hum_start = json_str.find('"humidity":') + 11
-                        hum_end = json_str.find(',', hum_start)
+                        hum_end = json_str.find(",", hum_start)
                         if hum_end == -1:
-                            hum_end = json_str.find('}', hum_start)
+                            hum_end = json_str.find("}", hum_start)
                         humidity = float(json_str[hum_start:hum_end].strip())
-                        
+
                         # REAL AI LEARNING: Train neural network with user feedback
                         self.ai_brain.learn_from_user_feedback(temp, humidity, rating)
-                        
+
                         # Send success response
                         response = "OK"
                         headers = "HTTP/1.1 200 OK\r\n"
@@ -344,16 +350,18 @@ class WeatherWebServer:
                         headers += "Access-Control-Allow-Origin: *\r\n"
                         headers += "Connection: close\r\n"
                         headers += f"Content-Length: {len(response)}\r\n\r\n"
-                        
+
                         client.send(headers.encode("utf-8"))
                         client.send(response.encode("utf-8"))
-                        
-                        print(f"✅ Neural network learned from user: {temp}°C, {humidity}% -> {rating} comfort")
+
+                        print(
+                            f"✅ Neural network learned from user: {temp}°C, {humidity}% -> {rating} comfort"
+                        )
                         return
-                        
+
         except Exception as e:
             print(f"Error processing feedback: {e}")
-            
+
         # Send error response
         error_response = "Invalid feedback"
         headers = "HTTP/1.1 400 Bad Request\r\n"
@@ -388,13 +396,13 @@ class WeatherWebServer:
 
         current_rssi = self.wifi_manager.get_rssi()
         internal_temp = self._read_internal_temperature()
-        
+
         try:
             # REAL AI: Get neural network prediction
             comfort_score = self.ai_brain.predict_comfort_level(temp, hum)
             comfort_description = self.ai_brain.get_comfort_description(comfort_score)
             ai_stats = self.ai_brain.get_learning_stats()
-            
+
             response = self.html_template.format(
                 temp=temp,
                 hum=hum,
@@ -410,12 +418,12 @@ class WeatherWebServer:
                 # Real AI predictions
                 comfort_score=comfort_score,
                 comfort_description=comfort_description,
-                prediction_count=ai_stats['predictions_made'],
-                temp_weight=ai_stats['temp_weight'],
-                humidity_weight=ai_stats['humidity_weight'],
-                bias=ai_stats['bias'],
+                prediction_count=ai_stats["predictions_made"],
+                temp_weight=ai_stats["temp_weight"],
+                humidity_weight=ai_stats["humidity_weight"],
+                bias=ai_stats["bias"],
             )
-            
+
         except Exception as e:
             print(f"Error formatting template: {e}")
             # Send simple fallback page
@@ -433,22 +441,40 @@ class WeatherWebServer:
         try:
             # Encode response to bytes first to get correct length
             response_bytes = response.encode("utf-8")
-            
+
             print(f"Response length: {len(response_bytes)} bytes")
-            
+
             # Remove Content-Length header to avoid mismatch issues
             headers = "HTTP/1.1 200 OK\r\n"
             headers += "Content-Type: text/html; charset=utf-8\r\n"
             headers += "Access-Control-Allow-Origin: *\r\n"
             headers += "Connection: close\r\n\r\n"
 
+            # Send in chunks to prevent truncation
             client.send(headers.encode("utf-8"))
-            client.send(response_bytes)
-            
+
+            # Send response in small chunks with retry logic
+            sent = 0
+            while sent < len(response_bytes):
+                try:
+                    chunk_size = min(512, len(response_bytes) - sent)
+                    chunk = response_bytes[sent : sent + chunk_size]
+                    bytes_sent = client.send(chunk)
+                    sent += bytes_sent
+                except OSError as e:
+                    if e.args[0] == 11:  # EAGAIN - socket buffer full
+                        continue  # Retry
+                    else:
+                        raise
+
+            print(f"Successfully sent {sent}/{len(response_bytes)} bytes")
+
         except Exception as e:
             print(f"Error sending response: {e}")
             # Send minimal error response
-            error_response = "HTTP/1.1 500 Internal Server Error\r\n\r\nError generating page"
+            error_response = (
+                "HTTP/1.1 500 Internal Server Error\r\n\r\nError generating page"
+            )
             client.send(error_response.encode("utf-8"))
 
     def stop(self):

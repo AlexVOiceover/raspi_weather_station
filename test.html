@@ -1,0 +1,112 @@
+<html><head>
+    <title>Pico W Weather Station</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f0f8ff; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .header { text-align: center; color: #2c3e50; margin-bottom: 30px; }
+        .current { background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .metric { display: inline-block; margin: 10px 20px; text-align: center; }
+        .metric-value { font-size: 2.5em; font-weight: bold; color: #e74c3c; }
+        .metric-label { font-size: 1.2em; color: #7f8c8d; }
+        .history { background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .history-item { padding: 8px; border-bottom: 1px solid #ecf0f1; display: grid; grid-template-columns: 1fr 1fr 1fr 2fr; gap: 10px; align-items: center; }
+        .history-item:last-child { border-bottom: none; }
+        .history-header { padding: 10px 8px; border-bottom: 2px solid #3498db; display: grid; grid-template-columns: 1fr 1fr 1fr 2fr; gap: 10px; font-weight: bold; color: #2c3e50; }
+        .ai-section { background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; border-left: 4px solid #e74c3c; display: none; }
+        .ai-prediction { text-align: center; }
+        .comfort-level { margin-bottom: 10px; }
+        .comfort-label { color: #7f8c8d; font-size: 1.1em; }
+        .comfort-value { color: #2c3e50; font-size: 1.8em; font-weight: bold; margin: 0 10px; }
+        .comfort-score { color: #95a5a6; font-size: 1.2em; }
+        .learning-info { color: #7f8c8d; margin-top: 15px; line-height: 1.4; }
+        .feedback-section { margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; }
+        .feedback-buttons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 10px 0; }
+        .feedback-btn { padding: 8px 12px; border: none; border-radius: 20px; cursor: pointer; font-size: 0.9em; transition: all 0.2s; }
+        .feedback-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        .comfortable { background: #27ae60; color: white; }
+        .good { background: #2ecc71; color: white; }
+        .neutral { background: #95a5a6; color: white; }
+        .poor { background: #e67e22; color: white; }
+        .bad { background: #e74c3c; color: white; }
+        #feedback-status { margin-top: 10px; font-weight: bold; color: #27ae60; }
+        .info { background: #3498db; color: white; padding: 15px; border-radius: 10px; margin-bottom: 20px; text-align: center; }
+        .footer { text-align: center; margin-top: 20px; color: #7f8c8d; font-size: 0.9em; }
+        @media (max-width: 600px) { .metric { margin: 10px 5px; } .metric-value { font-size: 2em; } }
+    </style>
+    <script>
+        setTimeout(function(){ location.reload(); }, 30000); // Auto-refresh every 30 seconds
+        
+        let clickCount = 0;
+        function revealAI() {
+            clickCount++;
+            if (clickCount >= 3) {
+                document.querySelector('.ai-section').style.display = 'block';
+            }
+        }
+        
+        function sendFeedback(rating) {
+            const temp = 25.2;
+            const humidity = 67.7;
+            
+            // Send feedback to server
+            fetch('/feedback', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({'rating': rating, 'temp': temp, 'humidity': humidity})
+            })
+            .then(response => response.text())
+            .then(data => {
+                document.getElementById('feedback-status').innerHTML = 'Thanks! Neural network learned from your feedback.';
+                setTimeout(() => {
+                    document.getElementById('feedback-status').innerHTML = '';
+                }, 3000);
+            })
+            .catch(error => {
+                document.getElementById('feedback-status').innerHTML = 'Feedback sent! (Training neural network...)';
+                console.log('Feedback sent:', rating);
+            });
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><span onclick="revealAI()">🌡️</span> Pico W Weather Station</h1>
+        </div>
+        
+        <div class="info">
+            <strong>Server Started:</strong> 00:00<br>
+            <strong>Uptime:</strong> 00:01:47<br>
+            <strong>IP Address:</strong> 192.168.2.99<br>
+            <strong>WiFi Signal:</strong> -53 dBm (Good)<br>
+            <strong>Chip Temperature:</strong> 36.4°C
+        </div>
+        
+        <div class="current">
+            <h2>Current Readings</h2>
+            <div class="metric">
+                <div class="metric-value">25.2°</div>
+                <div class="metric-label">Temperature</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value">67.7%</div>
+                <div class="metric-label">Humidity</div>
+            </div>
+        </div>
+        
+        <div class="ai-section">
+            <h2>🧠 Neural Network Prediction</h2>
+            <div class="ai-prediction">
+                <div class="comfort-level">
+                    <span class="comfort-label">Comfort Level:</span>
+                    <span class="comfort-value">Moderate</span>
+                    <span class="comfort-score">(56.8%)</span>
+                </div>
+                <div class="feedback-section">
+                    <p><strong>Help train the AI:</strong> How do you feel about these conditions?</p>
+                    <div class="feedback-buttons">
+                        <button onclick="sendFeedback(1.0)" class="feedback-btn comfortable">😊 Very Comfortable</button>
+                        <button onclick="sendFeedback(0.7)" class="feedback-btn good">🙂 Comfortable</button>
+                        <button onclick="sendFeedback(0.5)" class="feedback-btn neutral">😐 Neutral</button>
+                        <button onclick="sendFeedback(0.3)" class="feedback-btn poor">🙁 Uncomfortabl</button></div></div></div></div></div></body></html>
