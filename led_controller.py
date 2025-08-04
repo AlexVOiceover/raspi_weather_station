@@ -33,3 +33,15 @@ class LEDController:
     def startup_sequence(self):
         """LED startup indication"""
         self.blink(3, 0.5)
+    
+    def web_request_flash(self):
+        """Quick 3-flash pattern for web requests (non-blocking)"""
+        original_state = self.led.value()
+        for _ in range(3):
+            self.led.on()
+            time.sleep(0.05)  # Very short flash
+            self.led.off()
+            time.sleep(0.05)
+        # Restore original LED state
+        if original_state:
+            self.led.on()

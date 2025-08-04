@@ -9,7 +9,7 @@ class DisplayManager:
     def show_startup_message(self):
         """Show initial startup message"""
         self.display.fill(0)
-        self.display.text("PICO WEATHER", 15, 2)
+        self.display.text("FAC WEATHER", 15, 2)
         self.display.text("Starting up...", 15, 25)
         self.display.show()
 
@@ -18,7 +18,7 @@ class DisplayManager:
         self.display.fill(0)
 
         # Title
-        self.display.text("PICO WEATHER", 15, 2)
+        self.display.text("FAC WEATHER", 15, 2)
 
         # Connection status
         self.display.text("Connecting to:", 5, 20)
@@ -35,14 +35,13 @@ class DisplayManager:
             self.display.fill_rect(11, 46, bar_width, 6, 1)  # Progress
 
         self.display.show()
-    
 
     def show_weather_data(self, temp, hum, wifi_rssi, wlan):
         """Display weather station data"""
         self.display.fill(0)
 
         # Title
-        self.display.text("PICO WEATHER", 15, 2)
+        self.display.text("FAC WEATHER", 15, 2)
 
         # Temperature
         temp_str = f"{temp:.1f}C"
@@ -70,7 +69,7 @@ class DisplayManager:
         self.display.fill(0)
 
         # Title
-        self.display.text("PICO WEATHER", 15, 2)
+        self.display.text("FAC WEATHER", 15, 2)
 
         # Error message
         self.display.text("WiFi Failed!", 20, 20)

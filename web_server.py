@@ -5,15 +5,16 @@ import time
 
 
 class WeatherWebServer:
-    def __init__(self, wifi_manager):
+    def __init__(self, wifi_manager, led_controller=None):
         self.wifi_manager = wifi_manager
+        self.led_controller = led_controller
         self.server_socket = None
         self.poller = select.poll()
         self.clients = {}
         self.start_time = time.time()
         self.history = []  # Store readings: [(timestamp, temp, hum), ...]
         self.last_history_update = 0
-        
+
         self.html_template = """<!DOCTYPE html>
 <html>
 <head>
@@ -47,7 +48,8 @@ class WeatherWebServer:
         <div class="info">
             <strong>Server Started:</strong> {start_time}<br>
             <strong>Uptime:</strong> {uptime}<br>
-            <strong>IP Address:</strong> {ip_address}
+            <strong>IP Address:</strong> {ip_address}<br>
+            <strong>WiFi Signal:</strong> {wifi_rssi} dBm ({wifi_strength})
         </div>
         
         <div class="current">
@@ -89,18 +91,18 @@ class WeatherWebServer:
         print(f"HTTP server at http://{self.wifi_manager.get_ip()}:80")
         return True
 
-    def update_history(self, temp, hum):
+    def update_history(self, temp, hum, rssi):
         """Update historical data - called every minute"""
         current_time = time.time()
-        
+
         # Add reading if it's been at least 60 seconds since last update
         if current_time - self.last_history_update >= 60:
-            self.history.append((current_time, temp, hum))
-            
+            self.history.append((current_time, temp, hum, rssi))
+
             # Keep only last 24 readings (24 minutes of history)
             if len(self.history) > 24:
                 self.history.pop(0)
-                
+
             self.last_history_update = current_time
 
     def _format_time(self, timestamp):
@@ -119,13 +121,27 @@ class WeatherWebServer:
         seconds = elapsed % 60
         return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
+    def _get_signal_strength(self, rssi):
+        """Convert RSSI to descriptive signal strength"""
+        if rssi >= -50:
+            return "Excellent"
+        elif rssi >= -60:
+            return "Good"
+        elif rssi >= -70:
+            return "Fair"
+        elif rssi >= -80:
+            return "Weak"
+        else:
+            return "Poor"
+
     def handle_request(self, temp, hum):
         """Handle incoming web requests using polling"""
         if not self.server_socket:
             return
 
         # Update history every minute
-        self.update_history(temp, hum)
+        rssi = self.wifi_manager.get_rssi()
+        self.update_history(temp, hum, rssi)
 
         try:
             events = self.poller.poll(10)  # Poll for 10ms
@@ -155,6 +171,9 @@ class WeatherWebServer:
                             if path == "/favicon.ico":
                                 self._send_404(client_socket)
                             else:
+                                # Flash LED 3 times for web request
+                                if self.led_controller:
+                                    self.led_controller.web_request_flash()
                                 self._send_weather_page(client_socket, temp, hum)
                         else:
                             # No data, connection closed by client
@@ -184,33 +203,47 @@ class WeatherWebServer:
         # Generate history HTML
         history_html = ""
         if self.history:
-            for timestamp, h_temp, h_hum in reversed(self.history):  # Most recent first
-                time_str = self._format_time(timestamp)
-                history_html += f'''
-                <div class="history-item">
-                    <span>{time_str}</span>
-                    <span>{h_temp:.1f}°C, {h_hum:.1f}%</span>
-                </div>'''
+            for item in reversed(self.history):  # Most recent first
+                if len(item) == 4:  # New format with RSSI
+                    timestamp, h_temp, h_hum, h_rssi = item
+                    signal_strength = self._get_signal_strength(h_rssi)
+                    time_str = self._format_time(timestamp)
+                    history_html += f"""
+                    <div class="history-item">
+                        <span>{time_str}</span>
+                        <span>{h_temp:.1f}°C, {h_hum:.1f}%, {h_rssi}dBm ({signal_strength})</span>
+                    </div>"""
+                else:  # Old format without RSSI (backward compatibility)
+                    timestamp, h_temp, h_hum = item
+                    time_str = self._format_time(timestamp)
+                    history_html += f"""
+                    <div class="history-item">
+                        <span>{time_str}</span>
+                        <span>{h_temp:.1f}°C, {h_hum:.1f}%</span>
+                    </div>"""
         else:
             history_html = '<div class="history-item"><span>No historical data yet</span><span>-</span></div>'
-        
+
         # Format start time
         start_time_str = self._format_time(self.start_time)
-        
+
         # Get current time for footer
         current_time_str = self._format_time(time.time())
-        
+
+        current_rssi = self.wifi_manager.get_rssi()
         response = self.html_template.format(
             temp=temp,
             hum=hum,
             start_time=start_time_str,
+            wifi_rssi=current_rssi,
+            wifi_strength=self._get_signal_strength(current_rssi),
             uptime=self._get_uptime(),
             ip_address=self.wifi_manager.get_ip(),
             history_html=history_html,
             history_count=len(self.history),
-            current_time=current_time_str
+            current_time=current_time_str,
         )
-        
+
         headers = "HTTP/1.1 200 OK\r\n"
         headers += "Content-Type: text/html; charset=utf-8\r\n"
         headers += "Access-Control-Allow-Origin: *\r\n"

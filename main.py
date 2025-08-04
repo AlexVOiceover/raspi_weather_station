@@ -46,7 +46,7 @@ if not wifi.connect():
 
 # Start web server
 try:
-    web_server = WeatherWebServer(wifi)
+    web_server = WeatherWebServer(wifi, led)
     web_server.start()
     led.on()  # Solid LED = server running
 except Exception as e:
