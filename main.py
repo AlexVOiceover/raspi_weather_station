@@ -1,4 +1,4 @@
-# Pico W Weather Station - Refactored Main File
+# FAC Weather Station - Refactored Main File
 from machine import Pin, I2C
 import dht
 import time
@@ -27,6 +27,7 @@ led.startup_sequence()
 # Load WiFi configuration
 try:
     from config import SSID, PASSWORD
+
     ssid, password = SSID, PASSWORD
 except ImportError:
     print("Error importing configuration - config.py not found")
@@ -45,7 +46,7 @@ if not wifi.connect():
 
 # Start web server
 try:
-    web_server = WeatherWebServer(wifi)
+    web_server = WeatherWebServer(wifi, led)
     web_server.start()
     led.on()  # Solid LED = server running
 except Exception as e:
@@ -91,6 +92,14 @@ while True:
         # Handle web requests
         web_server.handle_request(temp, hum)
 
+        # Small delay to prevent busy-waiting
+        time.sleep(0.1)
+
+    except KeyboardInterrupt:
+        print("Stopping server...")
+        web_server.stop()
+        led.off()
+        sys.exit()
     except Exception as e:
         print("Error in main loop:", e)
         time.sleep(1)
