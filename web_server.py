@@ -1,6 +1,7 @@
 # Simple web server for weather data
 import socket
 import select
+import time
 
 
 class WeatherWebServer:
@@ -9,12 +10,68 @@ class WeatherWebServer:
         self.server_socket = None
         self.poller = select.poll()
         self.clients = {}
+        self.start_time = time.time()
+        self.history = []  # Store readings: [(timestamp, temp, hum), ...]
+        self.last_history_update = 0
+        
         self.html_template = """<!DOCTYPE html>
 <html>
-  <head><title>Pico W DHT22</title></head>
-  <body><h1>Temperature and Humidity</h1>
-    <p>Temp: {temp:.1f} &deg;C<br>Hum: {hum:.1f} %</p>
-  </body>
+<head>
+    <title>Pico W Weather Station</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f0f8ff; }}
+        .container {{ max-width: 800px; margin: 0 auto; }}
+        .header {{ text-align: center; color: #2c3e50; margin-bottom: 30px; }}
+        .current {{ background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }}
+        .metric {{ display: inline-block; margin: 10px 20px; text-align: center; }}
+        .metric-value {{ font-size: 2.5em; font-weight: bold; color: #e74c3c; }}
+        .metric-label {{ font-size: 1.2em; color: #7f8c8d; }}
+        .history {{ background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+        .history-item {{ padding: 8px; border-bottom: 1px solid #ecf0f1; display: flex; justify-content: space-between; }}
+        .history-item:last-child {{ border-bottom: none; }}
+        .info {{ background: #3498db; color: white; padding: 15px; border-radius: 10px; margin-bottom: 20px; text-align: center; }}
+        .footer {{ text-align: center; margin-top: 20px; color: #7f8c8d; font-size: 0.9em; }}
+        @media (max-width: 600px) {{ .metric {{ margin: 10px 5px; }} .metric-value {{ font-size: 2em; }} }}
+    </style>
+    <script>
+        setTimeout(function(){{ location.reload(); }}, 30000); // Auto-refresh every 30 seconds
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌡️ Pico W Weather Station</h1>
+        </div>
+        
+        <div class="info">
+            <strong>Server Started:</strong> {start_time}<br>
+            <strong>Uptime:</strong> {uptime}<br>
+            <strong>IP Address:</strong> {ip_address}
+        </div>
+        
+        <div class="current">
+            <h2>Current Readings</h2>
+            <div class="metric">
+                <div class="metric-value">{temp:.1f}°</div>
+                <div class="metric-label">Temperature (°C)</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value">{hum:.1f}%</div>
+                <div class="metric-label">Humidity</div>
+            </div>
+        </div>
+        
+        <div class="history">
+            <h2>📊 Recent History (Last {history_count} readings)</h2>
+            {history_html}
+        </div>
+        
+        <div class="footer">
+            Last updated: {current_time} | Auto-refresh in 30s
+        </div>
+    </div>
+</body>
 </html>"""
 
     def start(self):
@@ -32,10 +89,43 @@ class WeatherWebServer:
         print(f"HTTP server at http://{self.wifi_manager.get_ip()}:80")
         return True
 
+    def update_history(self, temp, hum):
+        """Update historical data - called every minute"""
+        current_time = time.time()
+        
+        # Add reading if it's been at least 60 seconds since last update
+        if current_time - self.last_history_update >= 60:
+            self.history.append((current_time, temp, hum))
+            
+            # Keep only last 24 readings (24 minutes of history)
+            if len(self.history) > 24:
+                self.history.pop(0)
+                
+            self.last_history_update = current_time
+
+    def _format_time(self, timestamp):
+        """Format timestamp for display"""
+        # Simple time formatting for MicroPython
+        elapsed = int(timestamp - self.start_time)
+        hours = elapsed // 3600
+        minutes = (elapsed % 3600) // 60
+        return f"{hours:02d}:{minutes:02d}"
+
+    def _get_uptime(self):
+        """Get formatted uptime"""
+        elapsed = int(time.time() - self.start_time)
+        hours = elapsed // 3600
+        minutes = (elapsed % 3600) // 60
+        seconds = elapsed % 60
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
     def handle_request(self, temp, hum):
         """Handle incoming web requests using polling"""
         if not self.server_socket:
             return
+
+        # Update history every minute
+        self.update_history(temp, hum)
 
         try:
             events = self.poller.poll(10)  # Poll for 10ms
@@ -91,7 +181,36 @@ class WeatherWebServer:
 
     def _send_weather_page(self, client, temp, hum):
         """Send weather data page"""
-        response = self.html_template.format(temp=temp, hum=hum)
+        # Generate history HTML
+        history_html = ""
+        if self.history:
+            for timestamp, h_temp, h_hum in reversed(self.history):  # Most recent first
+                time_str = self._format_time(timestamp)
+                history_html += f'''
+                <div class="history-item">
+                    <span>{time_str}</span>
+                    <span>{h_temp:.1f}°C, {h_hum:.1f}%</span>
+                </div>'''
+        else:
+            history_html = '<div class="history-item"><span>No historical data yet</span><span>-</span></div>'
+        
+        # Format start time
+        start_time_str = self._format_time(self.start_time)
+        
+        # Get current time for footer
+        current_time_str = self._format_time(time.time())
+        
+        response = self.html_template.format(
+            temp=temp,
+            hum=hum,
+            start_time=start_time_str,
+            uptime=self._get_uptime(),
+            ip_address=self.wifi_manager.get_ip(),
+            history_html=history_html,
+            history_count=len(self.history),
+            current_time=current_time_str
+        )
+        
         headers = "HTTP/1.1 200 OK\r\n"
         headers += "Content-Type: text/html; charset=utf-8\r\n"
         headers += "Access-Control-Allow-Origin: *\r\n"

@@ -4,13 +4,13 @@
 
 **Power Management:**
 - AMS1117-3.3 voltage regulator module
-- 2x Schottky diodes (BAT54, 1N5819, or similar)
+- 2x BAT42 Schottky diodes (30V, 200mA max)
 - 2S LiPo battery (7.4V, 1000-2000mAh recommended)
 - JST connector for battery (optional)
 
-**Capacitors (if not on AMS1117 module):**
-- 10µF capacitor (input)
-- 22µF capacitor (output)
+**Note on Capacitors:**
+- Most AMS1117 breakout boards include required capacitors pre-installed
+- If using bare AMS1117 IC: 10µF input, 22µF output capacitors needed
 
 ## Step-by-Step Wiring Instructions
 
@@ -20,8 +20,8 @@
 |----------------|---------------|--------------|-------------|------------|-------|
 | **2S LiPo Battery** | RED (+) | **Diode D1** | Anode | Red | Battery positive |
 | **2S LiPo Battery** | BLACK (-) | **Common GND** | - | Black | Battery negative |
-| **USB Connector** | VCC (+5V) | **Diode D2** | Anode | Red | USB positive |
-| **USB Connector** | GND | **Common GND** | - | Black | USB negative |
+| **Pico 2 W** | Pin 40 (VBUS) | **Diode D2** | Anode | Red | USB 5V from built-in connector |
+| **Pico 2 W** | Pin 38 (GND) | **Common GND** | - | Black | USB/System ground |
 | **Diode D1** | Cathode | **Junction Point** | - | Red | From battery |
 | **Diode D2** | Cathode | **Junction Point** | - | Red | From USB |
 | **Junction Point** | - | **AMS1117** | VIN | Red | Power input |
@@ -32,11 +32,11 @@
 ### Visual Layout
 
 ```
-[2S LiPo]     [USB Port]
+[2S LiPo]     [Pico 2 W Built-in USB]
     |             |
-   RED           VCC
+   RED         Pin 40 (VBUS)
     |             |
-    └─[D1]   [D2]─┘    D1, D2 = Schottky Diodes
+    └─[D1]   [D2]─┘    D1, D2 = BAT42 Schottky Diodes
          \   /          (Anodes toward sources)
           \ /
       [Junction Point]
@@ -56,8 +56,8 @@
 
 ### Power Input Side:
 1. **2S LiPo (+)** → **Schottky Diode Anode** → **Common Power Point**
-2. **USB VCC (+5V)** → **Schottky Diode Anode** → **Common Power Point**
-3. **Both GND** → **Common Ground**
+2. **Pico 2 W Pin 40 (VBUS)** → **Schottky Diode Anode** → **Common Power Point**
+3. **Battery GND & Pico Pin 38** → **Common Ground**
 
 ### Voltage Regulation:
 4. **Common Power Point** → **AMS1117 VIN**
@@ -70,10 +70,9 @@
 
 ## Diode Selection
 
-**Recommended Schottky Diodes:**
-- **BAT54** (30V, 200mA, SOD-523 package)
-- **1N5819** (40V, 1A, DO-41 package) - Easier to solder
-- **SS14** (40V, 1A, SMA package)
+**Required Schottky Diodes:**
+- **BAT42** (30V, 200mA max, DO-35 package)
+- Use BAT42 for both D1 (LiPo line) and D2 (USB VBUS line)
 
 **Purpose of Diodes:**
 - Prevents reverse current flow
@@ -81,6 +80,13 @@
 - Protects both USB and battery from damage
 
 ## Important Notes
+
+⚠️ **Current Limitation Warning:**
+- The BAT42 diode supports only ~200 mA max current
+- This setup is suitable for powering the Raspberry Pi Pico 2 W and low-power peripherals only
+- Total system current must stay under ~180 mA
+- Avoid powering high-draw devices like large displays or motors without upgrading the diode
+- Monitor diode temperature on first use to ensure safe operation
 
 ⚠️ **Safety Warnings:**
 - Always connect GND first, power last
@@ -103,4 +109,10 @@
 - Pin 36 (3V3) - 3.3V Power Input
 - Pin 38 (GND) - Ground
 - Pin 39 (VSYS) - System voltage (not used in this design)
-- Pin 40 (VBUS) - USB voltage (not used in this design)
+- Pin 40 (VBUS) - USB voltage input (5V when USB connected)
+
+**Test Points (Bottom of Board):**
+- TP1 - Ground (USB differential signal ground)
+- TP2 - USB Data Minus (DM) 
+- TP3 - USB Data Plus (DP)
+- Note: TP1-3 are for USB data signals, not power
